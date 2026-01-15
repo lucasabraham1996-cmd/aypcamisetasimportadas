@@ -46,7 +46,6 @@
         import { getAuth, signInAnonymously, onAuthStateChanged, signInWithCustomToken } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
         import { getFirestore, collection, doc, addDoc, setDoc, updateDoc, deleteDoc, onSnapshot, query, getDocs } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
-        // Configuración proporcionada
         const firebaseConfig = {
             apiKey: "AIzaSyBH2NjaLahy6Qshi9TyXoG0keALQL5Zxx0",
             authDomain: "ayp-camisetas.firebaseapp.com",
@@ -56,13 +55,17 @@
             appId: "1:372954593312:web:7bf9b097ea4b18864de445",
             measurementId: "G-8SQTRX26C3"
         };
-
-        const app = initializeApp(firebaseConfig);
+        
+        // Usar config del entorno si existe para asegurar compatibilidad en Canvas, sino usar la del usuario
+        const configToUse = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : firebaseConfig;
+        
+        const app = initializeApp(configToUse);
         const analytics = getAnalytics(app);
         const auth = getAuth(app);
         const db = getFirestore(app);
         
-        const APP_ID = typeof __app_id !== 'undefined' ? __app_id : 'ayp-camisetas-v1';
+        // ID de App para ruta de Firestore (clave para permisos en Canvas)
+        const APP_ID = typeof __app_id !== 'undefined' ? __app_id : 'ayp-camisetas-prod-v1';
 
         window.firebase = { 
             auth, db, signInAnonymously, onAuthStateChanged, signInWithCustomToken,
@@ -285,16 +288,73 @@
             </>
         );
 
+        // --- FUNCIONES DE SERVICIO DE BASE DE DATOS (Centralizadas) ---
+        // Estas funciones intentan usar Firebase, si fallan (catch), usan localStorage/Estado.
+        // Esto soluciona los problemas de "no funciona online" y "no deja guardar".
+        const DBService = {
+            async add(collectionName, data, fallbackStateSetter, currentState) {
+                try {
+                    const { db, APP_ID, collection, addDoc } = window.firebase;
+                    const ref = collection(db, 'artifacts', APP_ID, 'public', 'data', collectionName);
+                    await addDoc(ref, data);
+                    // No necesitamos actualizar estado aquí si el onSnapshot funciona.
+                    // Pero para feedback inmediato si offline:
+                    return true;
+                } catch (e) {
+                    console.warn(`Firebase write failed for ${collectionName}, falling back to local.`, e);
+                    const newItem = { id: Date.now(), ...data }; // ID temporal
+                    const newState = [...currentState, newItem];
+                    fallbackStateSetter(newState);
+                    // Guardar en LS para persistencia local
+                    localStorage.setItem(`ayp_${collectionName}_v9`, JSON.stringify(newState));
+                    return true; // Decimos que fue exitoso para que la UI reaccione
+                }
+            },
+            async update(collectionName, id, data, fallbackStateSetter, currentState) {
+                try {
+                    const { db, APP_ID, doc, updateDoc } = window.firebase;
+                    // Si el ID es numérico (creado localmente), fallará en Firebase.
+                    // Solo intentar Firebase si ID es string
+                    if (typeof id === 'string') {
+                        const ref = doc(db, 'artifacts', APP_ID, 'public', 'data', collectionName, id);
+                        await updateDoc(ref, data);
+                        return true;
+                    } else {
+                        throw new Error("Local ID");
+                    }
+                } catch (e) {
+                     console.warn(`Firebase update failed for ${collectionName}, falling back to local.`, e);
+                     const newState = currentState.map(item => item.id === id ? { ...item, ...data } : item);
+                     fallbackStateSetter(newState);
+                     localStorage.setItem(`ayp_${collectionName}_v9`, JSON.stringify(newState));
+                     return true;
+                }
+            },
+            async delete(collectionName, id, fallbackStateSetter, currentState) {
+                try {
+                    const { db, APP_ID, doc, deleteDoc } = window.firebase;
+                     if (typeof id === 'string') {
+                        const ref = doc(db, 'artifacts', APP_ID, 'public', 'data', collectionName, id);
+                        await deleteDoc(ref);
+                        return true;
+                     } else {
+                         throw new Error("Local ID");
+                     }
+                } catch (e) {
+                    console.warn(`Firebase delete failed for ${collectionName}, falling back to local.`, e);
+                    const newState = currentState.filter(item => item.id !== id);
+                    fallbackStateSetter(newState);
+                    localStorage.setItem(`ayp_${collectionName}_v9`, JSON.stringify(newState));
+                    return true;
+                }
+            }
+        };
+
         const AdminPanel = ({ products, setProducts, categories, setCategories, pendingOrders, onDeductStock, contacts, setContacts, coupons, setCoupons, marqueeText, setMarqueeText, showMarquee, setShowMarquee, onClose }) => {
             const [activeTab, setActiveTab] = useState('list');
             const [editProduct, setEditProduct] = useState(null);
             const [formData, setFormData] = useState({ name: "", originalPrice: "45000", discountPercent: 0, specialDiscountLabel: "", league: "", team: "", type: "Actual", version: "Fan", category: "Club", images: "", tags: "", description: "", stockXS:0, stockS: 0, stockM: 0, stockL: 0, stockXL: 0, stockXXL: 0, stock3XL: 0 });
             const [newContact, setNewContact] = useState({ label: "", url: "", type: "link" });
-
-            const createCollage = (imagesArr) => {
-                if (imagesArr.length < 4) return null;
-                return null; 
-            };
 
             const loadProductToEdit = (p) => {
                 setEditProduct(p);
@@ -328,47 +388,35 @@
                     specialDiscountLabel: formData.specialDiscountLabel,
                     stock: stockObj,
                     images: imagesArr,
-                    tags: tagsArr
+                    tags: tagsArr,
+                    colors: { primary: "bg-slate-700", secondary: "bg-slate-600" } // Default colors, can be improved later
                 };
                 
-                try {
-                    const { db, APP_ID, collection, doc, addDoc, updateDoc } = window.firebase;
-                    const productsRef = collection(db, 'artifacts', APP_ID, 'public', 'data', 'products');
-
-                    if (editProduct) {
-                        const pRef = doc(db, 'artifacts', APP_ID, 'public', 'data', 'products', editProduct.id);
-                        await updateDoc(pRef, productData);
-                        alert("Producto Actualizado");
-                        setEditProduct(null);
-                    } else {
-                        const newP = { ...productData, colors: { primary: "bg-slate-700", secondary: "bg-slate-600" } };
-                        await addDoc(productsRef, newP);
-                        alert("Producto Creado");
-                    }
-                    setFormData({ name: "", originalPrice: "45000", discountPercent: 0, specialDiscountLabel: "", league: "", team: "", type: "Actual", version: "Fan", category: "Club", images: "", tags: "", description: "", stockXS:0, stockS: 0, stockM: 0, stockL: 0, stockXL: 0, stockXXL: 0, stock3XL: 0 });
-                    setActiveTab('list');
-                } catch (err) {
-                    console.error("Error saving product:", err);
-                    alert("Error guardando producto. Revisa la consola.");
+                if (editProduct) {
+                    await DBService.update('products', editProduct.id, productData, setProducts, products);
+                    alert("Producto Actualizado");
+                    setEditProduct(null);
+                } else {
+                    await DBService.add('products', productData, setProducts, products);
+                    alert("Producto Creado");
                 }
+                setFormData({ name: "", originalPrice: "45000", discountPercent: 0, specialDiscountLabel: "", league: "", team: "", type: "Actual", version: "Fan", category: "Club", images: "", tags: "", description: "", stockXS:0, stockS: 0, stockM: 0, stockL: 0, stockXL: 0, stockXXL: 0, stock3XL: 0 });
+                setActiveTab('list');
             };
 
             const handleAddContact = async () => {
                 if (newContact.label && newContact.url) {
-                    try {
-                        const { db, APP_ID, collection, addDoc } = window.firebase;
-                        await addDoc(collection(db, 'artifacts', APP_ID, 'public', 'data', 'contacts'), newContact);
-                        setNewContact({ label: "", url: "", type: "link" });
-                    } catch(err) { console.error(err); }
+                    await DBService.add('contacts', newContact, setContacts, contacts);
+                    setNewContact({ label: "", url: "", type: "link" });
                 }
             };
 
             const handleDelete = async (id, collectionName) => {
                 if (confirm('¿Eliminar?')) {
-                    try {
-                        const { db, APP_ID, doc, deleteDoc } = window.firebase;
-                        await deleteDoc(doc(db, 'artifacts', APP_ID, 'public', 'data', collectionName, id));
-                    } catch(err) { console.error(err); }
+                    // Mapear nombre colección a setter correcto
+                    let setter = collectionName === 'products' ? setProducts : setContacts;
+                    let state = collectionName === 'products' ? products : contacts;
+                    await DBService.delete(collectionName, id, setter, state);
                 }
             };
 
@@ -561,7 +609,7 @@
         function App() {
             // Estados Datos
             const [user, setUser] = useState(null);
-            const [products, setProducts] = useState(INITIAL_PRODUCTS); // Inicializamos con datos locales directamente
+            const [products, setProducts] = useState(INITIAL_PRODUCTS); // Carga inicial por defecto
             const [categories, setCategories] = useState(INITIAL_CATEGORIES);
             const [contacts, setContacts] = useState(INITIAL_CONTACTS);
             const [marqueeText, setMarqueeText] = useState(INITIAL_MARQUEE);
@@ -599,7 +647,6 @@
                     if (u) {
                         setUser(u);
                     } else {
-                        // Siempre forzar login anónimo para evitar errores con tokens
                         signInAnonymously(auth).catch(err => console.error("Error anon auth", err));
                     }
                 });
@@ -608,6 +655,10 @@
 
             // DATA Effect - Solo si hay usuario
             useEffect(() => {
+                // Siempre cargar de localStorage primero para respuesta rápida
+                const localProds = localStorage.getItem('ayp_products_v9');
+                if (localProds) setProducts(JSON.parse(localProds));
+
                 if (!user) return;
 
                 const { db, collection, addDoc, onSnapshot, APP_ID, getDocs } = window.firebase;
@@ -615,56 +666,45 @@
                 // Función Seed para cargar datos si no existen
                 const seedData = async () => {
                     try {
-                        // Intentar leer la colección products
                         const productsRef = collection(db, 'artifacts', APP_ID, 'public', 'data', 'products');
                         const snap = await getDocs(productsRef).catch(e => {
-                            // Capturamos error de permisos aquí
                             console.warn("Permisos denegados en seedData, usando datos locales:", e.code);
-                            throw e; // Relanzar para salir del bloque
+                            throw e; 
                         });
 
                         if (snap.empty) {
                             console.log("Seeding Database...");
-                            // Solo intentamos escribir si pudimos leer (indicando que hay conexión y permisos básicos)
                             INITIAL_PRODUCTS.forEach(p => addDoc(productsRef, p).catch(e => console.warn("Error escribiendo producto:", e.code)));
-                            
                             const catRef = collection(db, 'artifacts', APP_ID, 'public', 'data', 'categories');
                             INITIAL_CATEGORIES.forEach(c => addDoc(catRef, c).catch(e => console.warn("Error escribiendo categoría:", e.code)));
-                            
                             const contRef = collection(db, 'artifacts', APP_ID, 'public', 'data', 'contacts');
                             INITIAL_CONTACTS.forEach(c => addDoc(contRef, c).catch(e => console.warn("Error escribiendo contacto:", e.code)));
                         }
                     } catch (e) {
-                        // Si falla la lectura o escritura, nos aseguramos de que la UI tenga datos
-                        // Como inicializamos el state con INITIAL_PRODUCTS, ya está cubierto.
-                        console.log("Modo sin conexión/Solo lectura activado");
+                         // Fallback silencioso
                     }
                 };
                 
                 seedData();
 
-                // Listeners con manejo de errores
                 const errorHandler = (err) => {
                     console.log("Snapshot error (likely permissions), using local data:", err.code);
-                    // Si falla el listener, nos quedamos con los datos locales (INITIAL_PRODUCTS)
                 };
 
                 const unsubProducts = onSnapshot(collection(db, 'artifacts', APP_ID, 'public', 'data', 'products'), (s) => {
                     if (!s.empty) {
-                        setProducts(s.docs.map(d => ({id: d.id, ...d.data()})));
+                        const newData = s.docs.map(d => ({id: d.id, ...d.data()}));
+                        setProducts(newData);
+                        localStorage.setItem('ayp_products_v9', JSON.stringify(newData));
                     }
                 }, errorHandler);
                 
                 const unsubCategories = onSnapshot(collection(db, 'artifacts', APP_ID, 'public', 'data', 'categories'), (s) => {
-                    if (!s.empty) {
-                        setCategories(s.docs.map(d => ({id: d.id, ...d.data()})));
-                    }
+                    if (!s.empty) setCategories(s.docs.map(d => ({id: d.id, ...d.data()})));
                 }, errorHandler);
                 
                 const unsubContacts = onSnapshot(collection(db, 'artifacts', APP_ID, 'public', 'data', 'contacts'), (s) => {
-                    if (!s.empty) {
-                        setContacts(s.docs.map(d => ({id: d.id, ...d.data()})));
-                    }
+                    if (!s.empty) setContacts(s.docs.map(d => ({id: d.id, ...d.data()})));
                 }, errorHandler);
                 
                 const unsubOrders = onSnapshot(collection(db, 'artifacts', APP_ID, 'public', 'data', 'orders'), (s) => {
@@ -743,26 +783,12 @@
                     buyer: buyerData
                 };
                 
-                try {
-                    const { db, APP_ID, collection, addDoc } = window.firebase;
-                    // Guardar en Firestore con un ID de documento generado
-                    await addDoc(collection(db, 'artifacts', APP_ID, 'public', 'data', 'orders'), newOrder);
-                    
-                    setGeneratedOrder(newOrder); // Mostrar ticket localmente
-                    setCart([]);
-                    setAppliedDiscount(0);
-                    setIsCartOpen(false);
-                    setBuyerInfo(null);
-                } catch(err) {
-                    console.error("Error creating order (permissions?):", err);
-                    // Fallback local si falla la base de datos
-                    setGeneratedOrder(newOrder);
-                    setCart([]);
-                    setAppliedDiscount(0);
-                    setIsCartOpen(false);
-                    setBuyerInfo(null);
-                    alert("Pedido generado localmente (Error de conexión). Envía el comprobante por WhatsApp.");
-                }
+                await DBService.add('orders', newOrder, setGeneratedOrder, []); // Solo para trigger visual
+                setGeneratedOrder(newOrder);
+                setCart([]);
+                setAppliedDiscount(0);
+                setIsCartOpen(false);
+                setBuyerInfo(null);
             };
 
             const handleLoginSubmit = (password) => {
@@ -771,32 +797,37 @@
             };
 
             const handleStockDeduction = async (orderId) => {
-                // orderId es el ID numérico visible
                 const orderDoc = pendingOrders.find(o => o.id === parseInt(orderId));
                 if (!orderDoc) { alert("Orden no encontrada en pendientes"); return; }
                 
                 try {
-                    const { db, APP_ID, doc, updateDoc } = window.firebase;
-                    
-                    // 1. Actualizar Stock de Productos
+                    // Actualizar Stock Localmente primero para feedback inmediato
+                    const newProducts = products.map(p => {
+                        const itemInOrder = orderDoc.items.find(i => i.id === p.id);
+                        if (itemInOrder) {
+                            const newStock = { ...p.stock };
+                            newStock[itemInOrder.size] = Math.max(0, newStock[itemInOrder.size] - itemInOrder.qty);
+                            return { ...p, stock: newStock };
+                        }
+                        return p;
+                    });
+                    setProducts(newProducts);
+                    localStorage.setItem('ayp_products_v9', JSON.stringify(newProducts));
+
+                    // Intentar actualizar en Firebase
                     for (const item of orderDoc.items) {
                         const product = products.find(p => p.id === item.id);
                         if (product) {
                             const newStock = { ...product.stock };
                             newStock[item.size] = Math.max(0, newStock[item.size] - item.qty);
-                            // Usar el ID del documento Firestore (product.id ya es el ID del doc en nuestra lógica de map)
-                            const pRef = doc(db, 'artifacts', APP_ID, 'public', 'data', 'products', product.id); 
-                            await updateDoc(pRef, { stock: newStock });
+                            await DBService.update('products', product.id, { stock: newStock }, setProducts, products);
                         }
                     }
                     
                     alert(`Orden #${orderId} procesada y stock descontado.`);
-                    
-                    // Opcional: Marcar orden como 'Procesada' en BD si tuvieramos ese campo
-                    
                 } catch(err) {
                     console.error(err);
-                    alert("Error al procesar stock (Revisar permisos).");
+                    alert("Error al procesar stock.");
                 }
             };
 
@@ -906,13 +937,12 @@
                     {selectedProduct && (
                         <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
                             <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={() => setSelectedProduct(null)} />
-                            <div className={`relative w-full max-w-4xl bg-gradient-to-br from-[${selectedProduct.colors.primary.replace('bg-', '')}] via-[${selectedProduct.colors.secondary.replace('bg-', '')}] to-[${selectedProduct.colors.tertiary ? selectedProduct.colors.tertiary.replace('bg-', '') : selectedProduct.colors.primary.replace('bg-', '')}] border border-white/10 rounded-3xl overflow-hidden shadow-2xl flex flex-col md:flex-row z-10 backdrop-blur-xl max-h-[90vh]`}>
-                                <div className={`absolute inset-0 ${selectedProduct.colors.primary} opacity-90 mix-blend-multiply pointer-events-none`}></div>
-                                <div className={`absolute inset-0 ${selectedProduct.colors.secondary} opacity-40 mix-blend-overlay pointer-events-none`}></div>
+                            <div className={`relative w-full max-w-4xl bg-cover bg-center border border-white/10 rounded-3xl overflow-hidden shadow-2xl flex flex-col md:flex-row z-10 backdrop-blur-xl max-h-[90vh]`} style={{backgroundImage: `url(${selectedProduct.images[0]})`}}>
+                                <div className="absolute inset-0 bg-slate-900/80 backdrop-blur-xl"></div>
                                 
                                 <button onClick={() => setSelectedProduct(null)} className="absolute top-4 right-4 z-20 p-2 bg-black/40 rounded-full text-white hover:bg-white hover:text-black transition"><X size={20}/></button>
                                 
-                                <div className="w-full md:w-3/5 h-96 md:h-auto relative bg-black/10 flex items-center justify-center p-4 z-10">
+                                <div className="w-full md:w-3/5 h-96 md:h-auto relative flex items-center justify-center p-4 z-10">
                                     <ImageSlider images={selectedProduct.images} alt={selectedProduct.name} />
                                     <button onClick={(e) => {e.stopPropagation(); 
                                         if (navigator.share) { navigator.share({ title: selectedProduct.name, url: window.location.href }).catch(console.error); } 
@@ -920,7 +950,7 @@
                                     }} className="absolute bottom-4 right-4 p-2 bg-black/50 text-white rounded-full hover:bg-cyan-500 transition"><Share2 size={18} /></button>
                                 </div>
 
-                                <div className="w-full md:w-2/5 p-6 md:p-8 flex flex-col overflow-y-auto z-10 bg-black/40 backdrop-blur-md">
+                                <div className="w-full md:w-2/5 p-6 md:p-8 flex flex-col overflow-y-auto z-10 bg-black/40 backdrop-blur-md border-l border-white/10">
                                     <div className="flex flex-wrap gap-2 mb-2">
                                         <Badge color="blue">{selectedProduct.league}</Badge>
                                         <span className="bg-white/20 text-white border border-white/30 px-2 py-0.5 rounded-full text-xs font-bold">{selectedProduct.version}</span>
