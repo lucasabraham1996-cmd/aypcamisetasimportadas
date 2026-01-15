@@ -46,7 +46,7 @@
         import { getAuth, signInAnonymously, onAuthStateChanged, signInWithCustomToken } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
         import { getFirestore, collection, doc, addDoc, setDoc, updateDoc, deleteDoc, onSnapshot, query, getDocs } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
-        // Configuración proporcionada
+        // Configuración por defecto (fallback)
         const firebaseConfig = {
             apiKey: "AIzaSyBH2NjaLahy6Qshi9TyXoG0keALQL5Zxx0",
             authDomain: "ayp-camisetas.firebaseapp.com",
@@ -56,13 +56,17 @@
             appId: "1:372954593312:web:7bf9b097ea4b18864de445",
             measurementId: "G-8SQTRX26C3"
         };
-
-        const app = initializeApp(firebaseConfig);
+        
+        // Usar config del entorno si existe
+        const configToUse = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : firebaseConfig;
+        
+        const app = initializeApp(configToUse);
         const analytics = getAnalytics(app);
         const auth = getAuth(app);
         const db = getFirestore(app);
         
-        const APP_ID = typeof __app_id !== 'undefined' ? __app_id : 'ayp-camisetas-v1';
+        // IMPORTANTE: Usar el ID de app del entorno para las rutas de Firestore
+        const APP_ID = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
 
         window.firebase = { 
             auth, db, signInAnonymously, onAuthStateChanged, signInWithCustomToken,
@@ -131,18 +135,18 @@
         ];
 
         const INITIAL_PRODUCTS = [
-            { id: 1, name: "Argentina 2025", price: 45000, originalPrice: 45000, discountPercent: 0, specialDiscountLabel: "", league: "World Cup", team: "Argentina", type: "Actual", version: "Fan", category: "Selección", sizes: ["S", "M", "L", "XL", "XXL"], stock: { "XS": 2, "S": 10, "M": 10, "L": 10, "XL": 5, "XXL": 2, "3XL": 1 }, images: ["https://i.postimg.cc/bNNfKWrw/a-RGENTINA-2025.webp"], tags: ["2025", "Campeón"], description: "Camiseta oficial de la Selección Argentina para la temporada 2025. Tecnología de absorción de humedad AEROREADY.", colors: { primary: "bg-sky-200", secondary: "bg-white" } },
+            { id: 1, name: "Argentina 2025", price: 45000, originalPrice: 45000, discountPercent: 0, specialDiscountLabel: "Campeón", league: "World Cup", team: "Argentina", type: "Actual", version: "Fan", category: "Selección", sizes: ["S", "M", "L", "XL", "XXL"], stock: { "XS": 2, "S": 10, "M": 10, "L": 10, "XL": 5, "XXL": 2, "3XL": 1 }, images: ["https://i.postimg.cc/bNNfKWrw/a-RGENTINA-2025.webp"], tags: ["2025", "Campeón"], description: "Camiseta oficial de la Selección Argentina para la temporada 2025. Tecnología de absorción de humedad AEROREADY.", colors: { primary: "bg-sky-200", secondary: "bg-white" } },
             { id: 2, name: "Alemania 2026", price: 45000, originalPrice: 45000, discountPercent: 0, specialDiscountLabel: "", league: "World Cup", team: "Alemania", type: "Actual", version: "Fan", category: "Selección", sizes: ["S", "M", "L", "XL"], stock: { "XS": 0, "S": 8, "M": 12, "L": 10, "XL": 6, "XXL": 0, "3XL": 0 }, images: ["https://i.postimg.cc/mZSGpBLh/Alemania-2026.webp"], tags: ["2026"], description: "Camiseta local de Alemania para el Mundial 2026. Diseño clásico en blanco y negro.", colors: { primary: "bg-white", secondary: "bg-black" } },
-            { id: 3, name: "Boca Retro 1998", price: 45000, originalPrice: 45000, discountPercent: 0, specialDiscountLabel: "", league: "Argentina LPF", team: "Boca Juniors", type: "Retro", version: "Normal", category: "Club", sizes: ["S", "M", "L", "XL"], stock: { "XS": 0, "S": 5, "M": 8, "L": 7, "XL": 3, "XXL": 0, "3XL": 0 }, images: ["https://i.postimg.cc/wxkd4gqJ/Boca-retro-1998.webp"], tags: ["Retro", "1998"], description: "Edición retro histórica de Boca Juniors 1998. Cuello polo y franja amarilla tradicional.", colors: { primary: "bg-blue-800", secondary: "bg-yellow-500" } },
-            { id: 4, name: "Boca Titular 2025", price: 45000, originalPrice: 45000, discountPercent: 0, specialDiscountLabel: "", league: "Argentina LPF", team: "Boca Juniors", type: "Actual", version: "Fan", category: "Club", sizes: ["S", "M", "L", "XL", "XXL"], stock: { "XS": 2, "S": 10, "M": 10, "L": 10, "XL": 5, "XXL": 2, "3XL": 1 }, images: ["https://i.postimg.cc/QNqrYh87/Boca-titular-2025.webp"], tags: ["2025", "Azul y Oro"], description: "Camiseta titular de Boca Juniors temporada 2025.", colors: { primary: "bg-blue-700", secondary: "bg-yellow-500" } },
-            { id: 5, name: "Chelsea 2026", price: 45000, originalPrice: 45000, discountPercent: 0, specialDiscountLabel: "", league: "Premier League", team: "Chelsea", type: "Actual", version: "Player", category: "Club", sizes: ["S", "M", "L", "XL"], stock: { "XS": 0, "S": 8, "M": 12, "L": 10, "XL": 6, "XXL": 0, "3XL": 0 }, images: ["https://i.postimg.cc/nccf6grX/CHELSEA-2026.avif"], tags: ["2026", "Blues"], description: "Camiseta Chelsea 2026 versión jugador. Corte ajustado y tecnología de ventilación avanzada.", colors: { primary: "bg-blue-600", secondary: "bg-blue-800" } },
+            { id: 3, name: "Boca Retro 1998", price: 45000, originalPrice: 45000, discountPercent: 0, specialDiscountLabel: "Retro", league: "Argentina LPF", team: "Boca Juniors", type: "Retro", version: "Normal", category: "Club", sizes: ["S", "M", "L", "XL"], stock: { "XS": 0, "S": 5, "M": 8, "L": 7, "XL": 3, "XXL": 0, "3XL": 0 }, images: ["https://i.postimg.cc/wxkd4gqJ/Boca-retro-1998.webp"], tags: ["Retro", "1998"], description: "Edición retro histórica de Boca Juniors 1998. Cuello polo y franja amarilla tradicional.", colors: { primary: "bg-blue-800", secondary: "bg-yellow-500" } },
+            { id: 4, name: "Boca Titular 2025", price: 45000, originalPrice: 45000, discountPercent: 0, specialDiscountLabel: "Nuevo", league: "Argentina LPF", team: "Boca Juniors", type: "Actual", version: "Fan", category: "Club", sizes: ["S", "M", "L", "XL", "XXL"], stock: { "XS": 2, "S": 10, "M": 10, "L": 10, "XL": 5, "XXL": 2, "3XL": 1 }, images: ["https://i.postimg.cc/QNqrYh87/Boca-titular-2025.webp"], tags: ["2025", "Azul y Oro"], description: "Camiseta titular de Boca Juniors temporada 2025.", colors: { primary: "bg-blue-700", secondary: "bg-yellow-500" } },
+            { id: 5, name: "Chelsea 2026", price: 45000, originalPrice: 45000, discountPercent: 0, specialDiscountLabel: "Player Version", league: "Premier League", team: "Chelsea", type: "Actual", version: "Player", category: "Club", sizes: ["S", "M", "L", "XL"], stock: { "XS": 0, "S": 8, "M": 12, "L": 10, "XL": 6, "XXL": 0, "3XL": 0 }, images: ["https://i.postimg.cc/nccf6grX/CHELSEA-2026.avif"], tags: ["2026", "Blues"], description: "Camiseta Chelsea 2026 versión jugador. Corte ajustado y tecnología de ventilación avanzada.", colors: { primary: "bg-blue-600", secondary: "bg-blue-800" } },
             { id: 6, name: "Liverpool Suplente", price: 45000, originalPrice: 45000, discountPercent: 0, specialDiscountLabel: "Suplente", league: "Premier League", team: "Liverpool", type: "Actual", version: "Fan", category: "Club", sizes: ["S", "M", "L", "XL"], stock: { "XS": 0, "S": 8, "M": 12, "L": 10, "XL": 6, "XXL": 0, "3XL": 0 }, images: ["https://i.postimg.cc/L66Frw5q/LIVERPOOL-SUPLENTE.webp"], tags: ["Suplente"], description: "Segunda equipación del Liverpool. Diseño moderno y urbano.", colors: { primary: "bg-green-600", secondary: "bg-white" } },
-            { id: 7, name: "Milan Titular", price: 45000, originalPrice: 45000, discountPercent: 0, specialDiscountLabel: "", league: "Serie A", team: "Milan", type: "Actual", version: "Fan", category: "Club", sizes: ["S", "M", "L", "XL"], stock: { "XS": 0, "S": 8, "M": 12, "L": 10, "XL": 6, "XXL": 0, "3XL": 0 }, images: ["https://i.postimg.cc/L66Frw5Y/MILAN-TITULAR.webp"], tags: ["Rossoneri"], description: "Camiseta clásica a rayas rojas y negras del AC Milan.", colors: { primary: "bg-red-600", secondary: "bg-black" } },
-            { id: 8, name: "Real Madrid Tercera", price: 45000, originalPrice: 45000, discountPercent: 0, specialDiscountLabel: "", league: "La Liga", team: "Real Madrid", type: "Actual", version: "Fan", category: "Club", sizes: ["S", "M", "L", "XL"], stock: { "XS": 0, "S": 8, "M": 12, "L": 10, "XL": 6, "XXL": 0, "3XL": 0 }, images: ["https://i.postimg.cc/kXXPkzGt/Real-Madrid-tercera.webp"], tags: ["Tercera"], description: "Tercera equipación del Real Madrid. Elegancia y estilo.", colors: { primary: "bg-gray-800", secondary: "bg-yellow-500" } },
-            { id: 9, name: "River 2025", price: 45000, originalPrice: 45000, discountPercent: 0, specialDiscountLabel: "", league: "Argentina LPF", team: "River Plate", type: "Actual", version: "Fan", category: "Club", sizes: ["S", "M", "L", "XL"], stock: { "XS": 0, "S": 8, "M": 12, "L": 10, "XL": 6, "XXL": 0, "3XL": 0 }, images: ["https://i.postimg.cc/CLLpWX58/River-2025.jpg"], tags: ["2025", "Banda Roja"], description: "Camiseta titular de River Plate 2025. La banda roja tradicional.", colors: { primary: "bg-white", secondary: "bg-red-600" } },
-            { id: 10, name: "Corinthians Suplente", price: 45000, originalPrice: 45000, discountPercent: 0, specialDiscountLabel: "", league: "Brasileirao", team: "Corinthians", type: "Actual", version: "Fan", category: "Club", sizes: ["S", "M", "L", "XL"], stock: { "XS": 0, "S": 8, "M": 12, "L": 10, "XL": 6, "XXL": 0, "3XL": 0 }, images: ["https://i.postimg.cc/GhhnZVtG/SUPLENTE-CORINTHIANS.webp"], tags: ["Suplente"], description: "Camiseta negra alternativa del Timao.", colors: { primary: "bg-black", secondary: "bg-white" } },
-            { id: 11, name: "PSG Suplente", price: 45000, originalPrice: 45000, discountPercent: 0, specialDiscountLabel: "", league: "Ligue 1", team: "PSG", type: "Actual", version: "Fan", category: "Club", sizes: ["S", "M", "L", "XL"], stock: { "XS": 0, "S": 8, "M": 12, "L": 10, "XL": 6, "XXL": 0, "3XL": 0 }, images: ["https://i.postimg.cc/3JJQPVNp/SUPLENTE-PSG.jpg"], tags: ["Suplente"], description: "Camiseta suplente del Paris Saint-Germain.", colors: { primary: "bg-blue-900", secondary: "bg-red-600" } },
-            { id: 12, name: "Barcelona Tercera", price: 45000, originalPrice: 45000, discountPercent: 0, specialDiscountLabel: "", league: "La Liga", team: "Barcelona", type: "Actual", version: "Fan", category: "Club", sizes: ["S", "M", "L", "XL"], stock: { "XS": 0, "S": 8, "M": 12, "L": 10, "XL": 6, "XXL": 0, "3XL": 0 }, images: ["https://i.postimg.cc/RVVxjyhR/TERCERA-BARCELONA.webp"], tags: ["Tercera"], description: "Tercera camiseta del FC Barcelona. Diseño vibrante.", colors: { primary: "bg-teal-500", secondary: "bg-blue-900" } }
+            { id: 7, name: "Milan Titular", price: 45000, originalPrice: 45000, discountPercent: 0, specialDiscountLabel: "Clásico", league: "Serie A", team: "Milan", type: "Actual", version: "Fan", category: "Club", sizes: ["S", "M", "L", "XL"], stock: { "XS": 0, "S": 8, "M": 12, "L": 10, "XL": 6, "XXL": 0, "3XL": 0 }, images: ["https://i.postimg.cc/L66Frw5Y/MILAN-TITULAR.webp"], tags: ["Rossoneri"], description: "Camiseta clásica a rayas rojas y negras del AC Milan.", colors: { primary: "bg-red-600", secondary: "bg-black" } },
+            { id: 8, name: "Real Madrid Tercera", price: 45000, originalPrice: 45000, discountPercent: 0, specialDiscountLabel: "Tercera", league: "La Liga", team: "Real Madrid", type: "Actual", version: "Fan", category: "Club", sizes: ["S", "M", "L", "XL"], stock: { "XS": 0, "S": 8, "M": 12, "L": 10, "XL": 6, "XXL": 0, "3XL": 0 }, images: ["https://i.postimg.cc/kXXPkzGt/Real-Madrid-tercera.webp"], tags: ["Tercera"], description: "Tercera equipación del Real Madrid. Elegancia y estilo.", colors: { primary: "bg-gray-800", secondary: "bg-yellow-500" } },
+            { id: 9, name: "River 2025", price: 45000, originalPrice: 45000, discountPercent: 0, specialDiscountLabel: "Nuevo", league: "Argentina LPF", team: "River Plate", type: "Actual", version: "Fan", category: "Club", sizes: ["S", "M", "L", "XL"], stock: { "XS": 0, "S": 8, "M": 12, "L": 10, "XL": 6, "XXL": 0, "3XL": 0 }, images: ["https://i.postimg.cc/CLLpWX58/River-2025.jpg"], tags: ["2025", "Banda Roja"], description: "Camiseta titular de River Plate 2025. La banda roja tradicional.", colors: { primary: "bg-white", secondary: "bg-red-600" } },
+            { id: 10, name: "Corinthians Suplente", price: 45000, originalPrice: 45000, discountPercent: 0, specialDiscountLabel: "Suplente", league: "Brasileirao", team: "Corinthians", type: "Actual", version: "Fan", category: "Club", sizes: ["S", "M", "L", "XL"], stock: { "XS": 0, "S": 8, "M": 12, "L": 10, "XL": 6, "XXL": 0, "3XL": 0 }, images: ["https://i.postimg.cc/GhhnZVtG/SUPLENTE-CORINTHIANS.webp"], tags: ["Suplente"], description: "Camiseta negra alternativa del Timao.", colors: { primary: "bg-black", secondary: "bg-white" } },
+            { id: 11, name: "PSG Suplente", price: 45000, originalPrice: 45000, discountPercent: 0, specialDiscountLabel: "Suplente", league: "Ligue 1", team: "PSG", type: "Actual", version: "Fan", category: "Club", sizes: ["S", "M", "L", "XL"], stock: { "XS": 0, "S": 8, "M": 12, "L": 10, "XL": 6, "XXL": 0, "3XL": 0 }, images: ["https://i.postimg.cc/3JJQPVNp/SUPLENTE-PSG.jpg"], tags: ["Suplente"], description: "Camiseta suplente del Paris Saint-Germain.", colors: { primary: "bg-blue-900", secondary: "bg-red-600" } },
+            { id: 12, name: "Barcelona Tercera", price: 45000, originalPrice: 45000, discountPercent: 0, specialDiscountLabel: "Tercera", league: "La Liga", team: "Barcelona", type: "Actual", version: "Fan", category: "Club", sizes: ["S", "M", "L", "XL"], stock: { "XS": 0, "S": 8, "M": 12, "L": 10, "XL": 6, "XXL": 0, "3XL": 0 }, images: ["https://i.postimg.cc/RVVxjyhR/TERCERA-BARCELONA.webp"], tags: ["Tercera"], description: "Tercera camiseta del FC Barcelona. Diseño vibrante.", colors: { primary: "bg-teal-500", secondary: "bg-blue-900" } }
         ];
 
         // --- COMPONENTES AUXILIARES ---
@@ -162,28 +166,36 @@
             );
         };
 
+        // Componente para el formulario de datos del comprador
         const BuyerForm = ({ onSubmit, onClose }) => {
             const [formData, setFormData] = useState({ name: "", email: "", whatsapp: "", country: "", province: "" });
+            
             const handleSubmit = (e) => {
                 e.preventDefault();
-                if (formData.name && formData.whatsapp) { onSubmit(formData); }
-                else { alert("Nombre y WhatsApp son obligatorios."); }
+                // Validación básica
+                if (formData.name && formData.whatsapp && formData.country && formData.province) {
+                    onSubmit(formData);
+                } else {
+                    alert("Por favor completa todos los campos obligatorios.");
+                }
             };
+
             return (
                 <div className="fixed inset-0 z-[70] flex items-center justify-center p-4 bg-black/80 backdrop-blur-md">
                     <div className="bg-slate-900 border border-white/20 p-6 rounded-2xl w-full max-w-md shadow-2xl relative">
                         <button onClick={onClose} className="absolute top-4 right-4 text-slate-400 hover:text-white"><X size={20}/></button>
                         <h3 className="text-xl font-bold text-white mb-6 text-center">Datos del Comprador</h3>
                         <form onSubmit={handleSubmit} className="space-y-4">
-                            <input required placeholder="Nombre Completo" className="w-full bg-slate-800 border border-slate-700 rounded-lg p-3 text-white" value={formData.name} onChange={e=>setFormData({...formData, name: e.target.value})} />
-                            <input type="email" placeholder="Correo Electrónico (Opcional)" className="w-full bg-slate-800 border border-slate-700 rounded-lg p-3 text-white" value={formData.email} onChange={e=>setFormData({...formData, email: e.target.value})} />
-                            <input required placeholder="WhatsApp (con código de país)" className="w-full bg-slate-800 border border-slate-700 rounded-lg p-3 text-white" value={formData.whatsapp} onChange={e=>setFormData({...formData, whatsapp: e.target.value})} />
+                            <input required placeholder="Nombre Completo *" className="w-full bg-slate-800 border border-slate-700 rounded-lg p-3 text-white focus:border-cyan-500 outline-none" value={formData.name} onChange={e=>setFormData({...formData, name: e.target.value})} />
+                            <input type="email" placeholder="Correo Electrónico" className="w-full bg-slate-800 border border-slate-700 rounded-lg p-3 text-white focus:border-cyan-500 outline-none" value={formData.email} onChange={e=>setFormData({...formData, email: e.target.value})} />
+                            <input required placeholder="WhatsApp (con código de país) *" className="w-full bg-slate-800 border border-slate-700 rounded-lg p-3 text-white focus:border-cyan-500 outline-none" value={formData.whatsapp} onChange={e=>setFormData({...formData, whatsapp: e.target.value})} />
                             <div className="grid grid-cols-2 gap-4">
-                                <input placeholder="País" className="w-full bg-slate-800 border border-slate-700 rounded-lg p-3 text-white" value={formData.country} onChange={e=>setFormData({...formData, country: e.target.value})} />
-                                <input placeholder="Provincia/Estado" className="w-full bg-slate-800 border border-slate-700 rounded-lg p-3 text-white" value={formData.province} onChange={e=>setFormData({...formData, province: e.target.value})} />
+                                <input required placeholder="País *" className="w-full bg-slate-800 border border-slate-700 rounded-lg p-3 text-white focus:border-cyan-500 outline-none" value={formData.country} onChange={e=>setFormData({...formData, country: e.target.value})} />
+                                <input required placeholder="Provincia/Estado *" className="w-full bg-slate-800 border border-slate-700 rounded-lg p-3 text-white focus:border-cyan-500 outline-none" value={formData.province} onChange={e=>setFormData({...formData, province: e.target.value})} />
                             </div>
-                            <button type="submit" className="w-full py-3 bg-green-600 hover:bg-green-500 text-white font-bold rounded-xl">Continuar con el Pedido</button>
+                            <button type="submit" className="w-full py-3 bg-green-600 hover:bg-green-500 text-white font-bold rounded-xl transition-colors">Continuar con el Pedido</button>
                         </form>
+                        <p className="text-xs text-slate-500 mt-4 text-center">(*) Campos obligatorios</p>
                     </div>
                 </div>
             );
@@ -191,45 +203,91 @@
 
         const TicketView = ({ order, onClose }) => {
             if (!order) return null;
+            
             const handleWhatsApp = () => {
                 let message = `Hola, mi número de orden es #${order.id}. Quiero confirmar mi compra. ⚽\n\n`;
                 message += `*DATOS DEL COMPRADOR:*\nNombre: ${order.buyer.name}\nWhatsApp: ${order.buyer.whatsapp}\nEmail: ${order.buyer.email || 'N/A'}\nUbicación: ${order.buyer.province}, ${order.buyer.country}\n\n`;
-                order.items.forEach(item => { message += `*PRODUCTO:* ${item.name} (${item.version || 'Normal'}) - Talle ${item.size}\nLINK DEL PRODUCTO: ${item.images[0]}\n\n`; });
-                message += `*TOTAL DEL PEDIDO: $${order.finalTotal.toLocaleString()}*`;
+                message += `*PEDIDO:*\n`;
+                order.items.forEach(item => { message += `- ${item.name} (${item.version || 'Normal'}) - Talle ${item.size} x${item.qty}\n`; });
+                message += `\n*TOTAL A PAGAR: $${order.finalTotal.toLocaleString()}*`;
                 window.open(`https://wa.me/5493515604303?text=${encodeURIComponent(message)}`, '_blank');
             };
 
             const handleDownloadPDF = () => {
                 const doc = new jspdf.jsPDF();
-                doc.setFont("helvetica", "bold");
-                doc.text("AyP Importados - Comprobante de Venta", 20, 20);
-                doc.setFont("helvetica", "normal");
-                doc.setFontSize(12);
-                doc.text(`Orden #: ${order.id}`, 20, 30);
-                doc.text(`Fecha: ${new Date(order.date).toLocaleDateString()} ${new Date(order.date).toLocaleTimeString()}`, 20, 38);
                 
+                // Encabezado
+                doc.setFontSize(22);
                 doc.setFont("helvetica", "bold");
-                doc.text("Datos del Comprador:", 20, 50);
+                doc.text("AyP Importados", 105, 20, null, null, "center");
+                doc.setFontSize(12);
                 doc.setFont("helvetica", "normal");
-                doc.text(`Nombre: ${order.buyer.name}`, 20, 58);
-                doc.text(`WhatsApp: ${order.buyer.whatsapp}`, 20, 66);
-                if (order.buyer.email) doc.text(`Email: ${order.buyer.email}`, 20, 74);
-                doc.text(`Ubicación: ${order.buyer.province}, ${order.buyer.country}`, 20, (order.buyer.email ? 82 : 74));
+                doc.text("Comprobante de Orden de Compra", 105, 28, null, null, "center");
+                
+                // Línea separadora
+                doc.setLineWidth(0.5);
+                doc.line(20, 35, 190, 35);
 
-                let y = order.buyer.email ? 100 : 92;
+                // Detalles de la Orden
+                doc.setFontSize(10);
+                doc.text(`Orden #: ${order.id}`, 20, 45);
+                doc.text(`Fecha: ${new Date(order.date).toLocaleDateString()} ${new Date(order.date).toLocaleTimeString()}`, 190, 45, null, null, "right");
+
+                // Datos del Comprador
                 doc.setFont("helvetica", "bold");
-                doc.text("Productos:", 20, y);
+                doc.text("Datos del Comprador:", 20, 55);
                 doc.setFont("helvetica", "normal");
-                order.items.forEach((item, i) => {
-                    y += 8;
-                    doc.text(`${item.name} (${item.version}) - Talle ${item.size} x${item.qty} - $${(item.price * item.qty).toLocaleString()}`, 20, y);
+                doc.text(`Nombre: ${order.buyer.name}`, 20, 62);
+                doc.text(`WhatsApp: ${order.buyer.whatsapp}`, 20, 68);
+                doc.text(`Email: ${order.buyer.email || 'N/A'}`, 110, 62);
+                doc.text(`Ubicación: ${order.buyer.province}, ${order.buyer.country}`, 110, 68);
+
+                // Tabla de Productos
+                let y = 85;
+                doc.setFont("helvetica", "bold");
+                doc.text("Producto", 20, y);
+                doc.text("Cant.", 130, y, null, null, "center");
+                doc.text("Precio Unit.", 160, y, null, null, "right");
+                doc.text("Total", 190, y, null, null, "right");
+                doc.line(20, y + 2, 190, y + 2);
+                
+                y += 10;
+                doc.setFont("helvetica", "normal");
+                order.items.forEach((item) => {
+                    const productName = `${item.name} (${item.version || 'Normal'}) - Talle ${item.size}`;
+                    // Dividir texto largo si es necesario
+                    const splitTitle = doc.splitTextToSize(productName, 100);
+                    doc.text(splitTitle, 20, y);
+                    doc.text(`${item.qty}`, 130, y, null, null, "center");
+                    doc.text(`$${item.price.toLocaleString()}`, 160, y, null, null, "right");
+                    doc.text(`$${(item.price * item.qty).toLocaleString()}`, 190, y, null, null, "right");
+                    y += (splitTitle.length * 5) + 5; // Ajustar altura según líneas
                 });
 
-                y += 15;
+                // Totales
+                y += 5;
+                doc.line(20, y, 190, y);
+                y += 10;
+
+                if (order.discount > 0) {
+                    doc.text(`Subtotal:`, 160, y, null, null, "right");
+                    doc.text(`$${order.total.toLocaleString()}`, 190, y, null, null, "right");
+                    y += 8;
+                    doc.text(`Descuento (${order.discount}%):`, 160, y, null, null, "right");
+                    doc.text(`-$${(order.total - order.finalTotal).toLocaleString()}`, 190, y, null, null, "right");
+                    y += 8;
+                }
+
                 doc.setFont("helvetica", "bold");
-                doc.setFontSize(16);
-                doc.text(`TOTAL: $${order.finalTotal.toLocaleString()}`, 20, y);
-                
+                doc.setFontSize(14);
+                doc.text(`TOTAL:`, 160, y, null, null, "right");
+                doc.text(`$${order.finalTotal.toLocaleString()}`, 190, y, null, null, "right");
+
+                // Pie de página
+                doc.setFontSize(10);
+                doc.setFont("helvetica", "normal");
+                doc.text("Gracias por tu compra en AyP Importados!", 105, 280, null, null, "center");
+
                 doc.save(`AyP_Orden_${order.id}.pdf`);
             };
 
@@ -241,15 +299,23 @@
                             <div className="border-b-2 border-dashed border-slate-300 pb-4 mb-4">
                                 <p className="flex justify-between"><span>FECHA:</span> <span>{new Date(order.date).toLocaleDateString()}</span></p>
                                 <p className="flex justify-between"><span>HORA:</span> <span>{new Date(order.date).toLocaleTimeString()}</span></p>
-                                <p className="flex justify-between font-bold"><span>ORDEN #:</span> <span>{order.id}</span></p>
+                                <p className="flex justify-between font-bold text-lg"><span>ORDEN #:</span> <span>{order.id}</span></p>
                             </div>
-                            <div className="border-b-2 border-dashed border-slate-300 pb-4 mb-4 text-xs">
-                                <p className="font-bold mb-2">COMPRADOR:</p>
-                                <p>{order.buyer.name} - {order.buyer.whatsapp}</p>
-                                <p>{order.buyer.email}</p>
-                                <p>{order.buyer.province}, {order.buyer.country}</p>
+                            <div className="border-b-2 border-dashed border-slate-300 pb-4 mb-4 text-sm bg-slate-50 p-3 rounded">
+                                <p className="font-bold mb-2 uppercase border-b border-slate-200 pb-1">Datos del Comprador:</p>
+                                <p><span className="font-semibold">Nombre:</span> {order.buyer.name}</p>
+                                <p><span className="font-semibold">WhatsApp:</span> {order.buyer.whatsapp}</p>
+                                {order.buyer.email && <p><span className="font-semibold">Email:</span> {order.buyer.email}</p>}
+                                <p><span className="font-semibold">Ubicación:</span> {order.buyer.province}, {order.buyer.country}</p>
                             </div>
-                            <div className="space-y-4 mb-6">{order.items.map((item, i) => (<div key={i} className="flex flex-col border-b border-slate-100 pb-2 last:border-0"><div className="flex justify-between"><span className="font-bold">{item.name}</span><span className="font-bold">${(item.price * item.qty).toLocaleString()}</span></div><div className="text-xs text-slate-500 flex justify-between"><span>{item.version} | Talle: {item.size} x{item.qty}</span></div></div>))}</div><div className="border-t-2 border-dashed border-slate-300 pt-4 mb-6"><div className="flex justify-between text-lg font-black"><span>TOTAL</span><span>${order.finalTotal.toLocaleString()}</span></div></div><div className="space-y-2 no-print"><button onClick={handleWhatsApp} className="w-full bg-green-600 hover:bg-green-700 text-white py-3 rounded font-bold flex items-center justify-center gap-2 uppercase transition-colors"><MessageCircle size={18} /> Seguir compra por WhatsApp</button><button onClick={handleDownloadPDF} className="w-full bg-blue-600 hover:bg-blue-700 text-white py-3 rounded font-bold flex items-center justify-center gap-2 uppercase transition-colors"><CheckCircle size={18} /> Descargar PDF</button><button onClick={onClose} className="w-full bg-slate-200 hover:bg-slate-300 text-slate-900 py-3 rounded font-bold flex items-center justify-center gap-2 uppercase transition-colors">Cerrar</button></div></div>
+                            <div className="space-y-4 mb-6">{order.items.map((item, i) => (<div key={i} className="flex flex-col border-b border-slate-100 pb-2 last:border-0"><div className="flex justify-between items-start"><span className="font-bold flex-1">{item.name} <span className="text-xs font-normal text-slate-500">({item.version || 'Normal'})</span></span><span className="font-bold">${(item.price * item.qty).toLocaleString()}</span></div><div className="text-xs text-slate-500 flex justify-between"><span>Talle: {item.size} | Cantidad: {item.qty}</span></div></div>))}</div>
+                            <div className="border-t-2 border-dashed border-slate-300 pt-4 mb-6">
+                                {order.discount > 0 && <div className="flex justify-between text-sm text-slate-500 mb-2"><span>Subtotal</span><span>${order.total.toLocaleString()}</span></div>}
+                                {order.discount > 0 && <div className="flex justify-between text-sm text-green-600 mb-2"><span>Descuento ({order.discount}%)</span><span>-${(order.total - order.finalTotal).toLocaleString()}</span></div>}
+                                <div className="flex justify-between text-xl font-black mt-2"><span>TOTAL</span><span>${order.finalTotal.toLocaleString()}</span></div>
+                            </div>
+                            <div className="space-y-2 no-print"><button onClick={handleWhatsApp} className="w-full bg-green-600 hover:bg-green-700 text-white py-3 rounded font-bold flex items-center justify-center gap-2 uppercase transition-colors"><MessageCircle size={18} /> Seguir compra por WhatsApp</button><button onClick={handleDownloadPDF} className="w-full bg-blue-600 hover:bg-blue-700 text-white py-3 rounded font-bold flex items-center justify-center gap-2 uppercase transition-colors"><CheckCircle size={18} /> Descargar PDF</button><button onClick={onClose} className="w-full bg-slate-200 hover:bg-slate-300 text-slate-900 py-3 rounded font-bold flex items-center justify-center gap-2 uppercase transition-colors">Cerrar</button></div>
+                        </div>
                     </div>
                 </div>
             );
@@ -610,12 +676,8 @@
                     if (u) {
                         setUser(u);
                     } else {
-                        // Intentar loguearse
-                        if (initialToken) {
-                            signInWithCustomToken(auth, initialToken).catch(err => console.error("Error custom token", err));
-                        } else {
-                            signInAnonymously(auth).catch(err => console.error("Error anon auth", err));
-                        }
+                        // Siempre forzar login anónimo para evitar errores con tokens
+                        signInAnonymously(auth).catch(err => console.error("Error anon auth", err));
                     }
                 });
                 return () => unsubscribe();
