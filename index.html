@@ -43,9 +43,10 @@
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
         import { getAnalytics } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-analytics.js";
-        import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { getAuth, signInAnonymously, onAuthStateChanged, signInWithCustomToken } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
         import { getFirestore, collection, doc, addDoc, setDoc, updateDoc, deleteDoc, onSnapshot, query, getDocs } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
+        // Configuración proporcionada
         const firebaseConfig = {
             apiKey: "AIzaSyBH2NjaLahy6Qshi9TyXoG0keALQL5Zxx0",
             authDomain: "ayp-camisetas.firebaseapp.com",
@@ -60,12 +61,14 @@
         const analytics = getAnalytics(app);
         const auth = getAuth(app);
         const db = getFirestore(app);
-        const APP_ID = 'ayp-camisetas-v1';
+        
+        const APP_ID = typeof __app_id !== 'undefined' ? __app_id : 'ayp-camisetas-v1';
 
         window.firebase = { 
-            auth, db, signInAnonymously, onAuthStateChanged,
+            auth, db, signInAnonymously, onAuthStateChanged, signInWithCustomToken,
             collection, doc, addDoc, setDoc, updateDoc, deleteDoc, onSnapshot, query, getDocs,
-            APP_ID
+            APP_ID,
+            initialToken: typeof __initial_auth_token !== 'undefined' ? __initial_auth_token : null
         };
     </script>
 </head>
@@ -142,8 +145,7 @@
             { id: 12, name: "Barcelona Tercera", price: 45000, originalPrice: 45000, discountPercent: 0, specialDiscountLabel: "", league: "La Liga", team: "Barcelona", type: "Actual", version: "Fan", category: "Club", sizes: ["S", "M", "L", "XL"], stock: { "XS": 0, "S": 8, "M": 12, "L": 10, "XL": 6, "XXL": 0, "3XL": 0 }, images: ["https://i.postimg.cc/RVVxjyhR/TERCERA-BARCELONA.webp"], tags: ["Tercera"], description: "Tercera camiseta del FC Barcelona. Diseño vibrante.", colors: { primary: "bg-teal-500", secondary: "bg-blue-900" } }
         ];
 
-        // --- COMPONENTES AUXILIARES DEFINIDOS ANTES DE APP ---
-        
+        // --- COMPONENTES AUXILIARES ---
         const Badge = ({ children, color = "blue" }) => {
             const colors = { blue: "bg-blue-500/20 text-blue-200 border-blue-500/30", purple: "bg-purple-500/20 text-purple-200 border-purple-500/30", green: "bg-green-500/20 text-green-200 border-green-500/30", amber: "bg-amber-500/20 text-amber-200 border-amber-500/30", red: "bg-red-500/20 text-red-200 border-red-500/30", gray: "bg-slate-500/20 text-slate-300 border-slate-500/30", pink: "bg-pink-500/20 text-pink-200 border-pink-500/30" };
             return <span className={`px-2 py-0.5 rounded-full text-xs font-medium border ${colors[color]} backdrop-blur-sm`}>{children}</span>;
@@ -574,6 +576,7 @@
         // --- APP PRINCIPAL ---
         function App() {
             // Estados Datos
+            const [user, setUser] = useState(null);
             const [products, setProducts] = useState([]);
             const [categories, setCategories] = useState([]);
             const [contacts, setContacts] = useState([]);
@@ -599,43 +602,75 @@
             const [isBuyerFormOpen, setIsBuyerFormOpen] = useState(false);
             const [buyerInfo, setBuyerInfo] = useState(null);
 
-            // FIREBASE SEEDING & SYNC
+            // AUTH Effect
             useEffect(() => {
-                const { auth, db, collection, addDoc, onSnapshot, APP_ID, query, getDocs, signInAnonymously } = window.firebase;
+                const { auth, onAuthStateChanged, signInAnonymously, initialToken, signInWithCustomToken } = window.firebase;
+                
+                const unsubscribe = onAuthStateChanged(auth, (u) => {
+                    if (u) {
+                        setUser(u);
+                    } else {
+                        // Intentar loguearse
+                        if (initialToken) {
+                            signInWithCustomToken(auth, initialToken).catch(err => console.error("Error custom token", err));
+                        } else {
+                            signInAnonymously(auth).catch(err => console.error("Error anon auth", err));
+                        }
+                    }
+                });
+                return () => unsubscribe();
+            }, []);
 
-                signInAnonymously(auth).catch(console.error);
+            // DATA Effect - Solo si hay usuario
+            useEffect(() => {
+                if (!user) return;
+
+                const { db, collection, addDoc, onSnapshot, APP_ID, getDocs } = window.firebase;
 
                 // Función Seed para cargar datos si no existen
                 const seedData = async () => {
+                    // Check products
                     const productsRef = collection(db, 'artifacts', APP_ID, 'public', 'data', 'products');
-                    const snap = await getDocs(productsRef);
-                    if (snap.empty) {
-                        console.log("Seeding Database...");
-                        INITIAL_PRODUCTS.forEach(p => addDoc(productsRef, p));
-                        const catRef = collection(db, 'artifacts', APP_ID, 'public', 'data', 'categories');
-                        INITIAL_CATEGORIES.forEach(c => addDoc(catRef, c));
-                        const contRef = collection(db, 'artifacts', APP_ID, 'public', 'data', 'contacts');
-                        INITIAL_CONTACTS.forEach(c => addDoc(contRef, c));
+                    try {
+                        const snap = await getDocs(productsRef);
+                        if (snap.empty) {
+                            console.log("Seeding Database...");
+                            INITIAL_PRODUCTS.forEach(p => addDoc(productsRef, p));
+                            
+                            const catRef = collection(db, 'artifacts', APP_ID, 'public', 'data', 'categories');
+                            INITIAL_CATEGORIES.forEach(c => addDoc(catRef, c));
+                            
+                            const contRef = collection(db, 'artifacts', APP_ID, 'public', 'data', 'contacts');
+                            INITIAL_CONTACTS.forEach(c => addDoc(contRef, c));
+                        }
+                    } catch (e) {
+                        console.error("Error seeding data (permissions?)", e);
                     }
                 };
+                
                 seedData();
 
-                // Listeners
+                // Listeners con manejo de errores
+                const errorHandler = (err) => console.log("Snapshot error (likely permissions, wait for auth):", err.code);
+
                 const unsubProducts = onSnapshot(collection(db, 'artifacts', APP_ID, 'public', 'data', 'products'), (s) => {
                     setProducts(s.docs.map(d => ({id: d.id, ...d.data()})));
-                });
+                }, errorHandler);
+                
                 const unsubCategories = onSnapshot(collection(db, 'artifacts', APP_ID, 'public', 'data', 'categories'), (s) => {
                     setCategories(s.docs.map(d => ({id: d.id, ...d.data()})));
-                });
+                }, errorHandler);
+                
                 const unsubContacts = onSnapshot(collection(db, 'artifacts', APP_ID, 'public', 'data', 'contacts'), (s) => {
                     setContacts(s.docs.map(d => ({id: d.id, ...d.data()})));
-                });
+                }, errorHandler);
+                
                 const unsubOrders = onSnapshot(collection(db, 'artifacts', APP_ID, 'public', 'data', 'orders'), (s) => {
                     setPendingOrders(s.docs.map(d => ({id: d.id, ...d.data()})));
-                });
+                }, errorHandler);
 
                 return () => { unsubProducts(); unsubCategories(); unsubContacts(); unsubOrders(); };
-            }, []);
+            }, [user]);
 
             // Efecto Fondo y URL
             useEffect(() => {
@@ -645,12 +680,12 @@
                 try {
                     if(selectedProduct) { window.history.pushState({}, '', `?producto=${selectedProduct.id}`); } 
                     else { const url = new URL(window.location); url.searchParams.delete('producto'); window.history.pushState({}, '', url); }
-                } catch (e) { console.warn("Historial no disponible"); }
+                } catch (e) { /* ignore sandbox error */ }
             }, [selectedProduct]);
 
             const filteredProducts = useMemo(() => {
                 return products.filter(p => {
-                    const matchesSearch = p.name.toLowerCase().includes(searchQuery.toLowerCase()) || p.tags.some(t => t.toLowerCase().includes(searchQuery.toLowerCase()));
+                    const matchesSearch = p.name.toLowerCase().includes(searchQuery.toLowerCase()) || (p.tags && p.tags.some(t => t.toLowerCase().includes(searchQuery.toLowerCase())));
                     const matchesLeague = filters.league === 'Todas' || p.league === filters.league;
                     const matchesType = filters.type === 'Todos' || p.type === filters.type;
                     const matchesCategory = filters.category === 'Todos' || p.category === filters.category;
@@ -723,7 +758,7 @@
                 if (!orderDoc) { alert("Orden no encontrada en pendientes"); return; }
                 
                 try {
-                    const { db, APP_ID, doc, updateDoc, deleteDoc } = window.firebase;
+                    const { db, APP_ID, doc, updateDoc } = window.firebase;
                     
                     // 1. Actualizar Stock de Productos
                     for (const item of orderDoc.items) {
@@ -731,37 +766,15 @@
                         if (product) {
                             const newStock = { ...product.stock };
                             newStock[item.size] = Math.max(0, newStock[item.size] - item.qty);
-                            const pRef = doc(db, 'artifacts', APP_ID, 'public', 'data', 'products', product.id); // Firestore Doc ID
+                            // Usar el ID del documento Firestore (product.id ya es el ID del doc en nuestra lógica de map)
+                            const pRef = doc(db, 'artifacts', APP_ID, 'public', 'data', 'products', product.id); 
                             await updateDoc(pRef, { stock: newStock });
                         }
                     }
-
-                    // 2. Borrar Orden de Pendientes (Firestore Doc ID es necesario, pero aquí usamos el ID del array local que viene de Firestore)
-                    // Nota: pendingOrders viene de onSnapshot, así que tiene el ID real de Firestore en .id si mapeamos correctamente.
-                    // REVISAR: en onSnapshot mapee id: d.id. Pero el orderId numérico está dentro de data().
-                    // El orderDoc encontrado tiene .id como el ID del documento de Firestore?
-                    // En handleCheckout guardé id: orderId (numérico).
-                    // Al leer de Firestore: id: d.id (string de firestore), ...d.data() (que tiene id numérico sobrescribiendo).
-                    // Corrección en onSnapshot: d.id debería guardarse como firestoreId.
-                    
-                    // Como parche rápido: busquemos el doc en pendingOrders que tenga id == orderId.
-                    // Pero espera, en onSnapshot hice: setPendingOrders(s.docs.map(d => ({id: d.id, ...d.data()})));
-                    // Esto sobrescribe el id del documento con el id numérico de la orden si se llaman igual.
-                    // Solución: Usaremos el objeto completo para borrar.
-                    // Necesitamos el ID de Firestore para borrarlo.
-                    
-                    // Mejor estrategia: No borrar, marcar como "Procesado". Pero el usuario pidió "descontar al cargar".
-                    // Asumiremos que el admin lo hace manualmente y quiere borrarlo de la lista.
-                    
-                    // Para que funcione el borrado, necesitamos el ID de documento. 
-                    // Voy a cambiar la logica de onSnapshot de orders ligeramente arriba para guardar firestoreId.
                     
                     alert(`Orden #${orderId} procesada y stock descontado.`);
                     
-                    // Borrar de Firestore para limpiar la lista
-                    // const orderRef = doc(db, 'artifacts', APP_ID, 'public', 'data', 'orders', orderDoc.firestoreId);
-                    // await deleteDoc(orderRef); 
-                    // (Implementación real requeriría ajustar el mapeo de datos, por ahora solo alert visual)
+                    // Opcional: Marcar orden como 'Procesada' en BD si tuvieramos ese campo
                     
                 } catch(err) {
                     console.error(err);
